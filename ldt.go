@@ -5,10 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 type Response struct {
@@ -16,7 +18,7 @@ type Response struct {
 	Tags []string `json:"tags"`
 }
 
-// If successful, will print the latest repository tag based on prefix or regex
+// If successful, will print the latest repository tag based on prefix or regex, or fallback to "latest" in any case
 func main() {
 	var (
 		repoVersion = flag.String("v", "v2", "Docker repository version")
@@ -43,11 +45,21 @@ func main() {
 		printDefault()
 	}
 
-	url := fmt.Sprintf("%s/%s/%s/tags/list", *repoHost, *repoVersion, *repoName)
+	uri := fmt.Sprintf("%s/%s/%s/tags/list", *repoHost, *repoVersion, *repoName)
+	if _, err := url.Parse(uri); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse uri: %s\n", err.Error())
+		printDefault()
+	}
 
-	resp, err := http.Get(url)
+	client := http.Client{
+		// Timeout & exit after 5 seconds of waiting for the tags to be fetched
+		Timeout: time.Duration(time.Second * 5),
+	}
+
+	resp, err := client.Get(uri)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "cannot GET %s: %s\n", uri, err.Error())
+		printDefault()
 	}
 	defer resp.Body.Close()
 
@@ -78,7 +90,7 @@ func main() {
 	if len(*tagRegex) > 0 {
 		rgx, err := regexp.Compile(*tagRegex)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "cannot compile/parse regex")
+			fmt.Fprintf(os.Stderr, "cannot compile/parse regex: %s\n", err.Error())
 			printDefault()
 		}
 		for _, t := range response.Tags {
@@ -106,6 +118,7 @@ func matchedByRegex(tag string, rgx *regexp.Regexp) bool {
 }
 
 func printDefault() {
+	// In case there's an error, fallback to the value "latest" so as to give a valid docker tag in any case
 	fmt.Println("latest")
 	os.Exit(-1)
 }

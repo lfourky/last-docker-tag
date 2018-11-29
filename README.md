@@ -49,10 +49,12 @@ docker run --rm lfourky/last-docker-tag -h "http://192.168.0.100:5000" -n "aweso
 ```
 
 * Do not use both prefix and regex at the same time, pick one.
+* You can redirect the error to a log file, the default value returned to STDOUT is "latest" if there's an error, e.g.
+`go run ldt.go -h http://192.168.0.100:5000 -n lfourky/awesomeImage -p build_ 2>> errors.log`
 
 # Where I used it
 https://github.com/kubernetes/kubernetes/issues/33664
 So I've started using Kubernetes and Drone CI for myself lately. I've found that, when I publish an image to my docker repository, and then try to apply a newer version with `kubectl set image...` and the tag is `latest`, even though there's a newer version in my docker repo, the image is not being reapplied / repulled. Thus, a workaround (this project) I'm now using is:
 ```sh
-kubectl set image deployment.v1.apps/notifications notifications=192.168.0.100:5000/ntf/notifications:$(docker run --rm lfourky/last-docker-tag -h http://192.168.0.100:5000 -n ntf/notifications -p build_)
+kubectl set image deployment.v1.apps/notifications notifications=192.168.0.100:5000/ntf/notifications:$(docker run --rm lfourky/last-docker-tag -h http://192.168.0.100:5000 -n ntf/notifications -p build_ 2>>errors.log)
 ```
