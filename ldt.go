@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,24 +31,26 @@ func main() {
 
 	flag.Parse()
 
+	log.SetOutput(os.Stderr)
+
 	if len(*tagPrefix) > 0 && len(*tagRegex) > 0 {
-		fmt.Fprintln(os.Stderr, "can't set both prefix & regex")
+		log.Println("can't set both prefix & regex")
 		printDefault()
 	}
 
 	if len(*repoHost) == 0 {
-		fmt.Fprintln(os.Stderr, "repository host needs to be set")
+		log.Println("repository host needs to be set")
 		printDefault()
 	}
 
 	if len(*repoName) == 0 {
-		fmt.Fprintln(os.Stderr, "repository name needs to be set")
+		log.Println("repository name needs to be set")
 		printDefault()
 	}
 
 	uri := fmt.Sprintf("%s/%s/%s/tags/list", *repoHost, *repoVersion, *repoName)
 	if _, err := url.Parse(uri); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to parse uri: %s\n", err.Error())
+		log.Printf("failed to parse uri: %s", err.Error())
 		printDefault()
 	}
 
@@ -58,19 +61,19 @@ func main() {
 
 	resp, err := client.Get(uri)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cannot GET %s: %s\n", uri, err.Error())
+		log.Printf("cannot GET %s: %s", uri, err.Error())
 		printDefault()
 	}
 	defer resp.Body.Close()
 
 	var response Response
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		fmt.Fprintf(os.Stderr, "err decoding response: %s\n", err.Error())
+		log.Printf("err decoding response: %s", err.Error())
 		printDefault()
 	}
 
 	if len(response.Tags) == 0 {
-		fmt.Fprintln(os.Stderr, "couldn't find any tags")
+		log.Println("couldn't find any tags")
 		printDefault()
 	}
 
@@ -90,7 +93,7 @@ func main() {
 	if len(*tagRegex) > 0 {
 		rgx, err := regexp.Compile(*tagRegex)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cannot compile/parse regex: %s\n", err.Error())
+			log.Printf("cannot compile/parse regex: %s", err.Error())
 			printDefault()
 		}
 		for _, t := range response.Tags {
@@ -101,12 +104,13 @@ func main() {
 	}
 
 	if len(matchedTags) == 0 {
-		fmt.Fprintln(os.Stderr, "couldn't match any tags")
+		log.Println("couldn't match any tags")
 		printDefault()
 	}
 
 	sort.Strings(matchedTags)
-	fmt.Println(matchedTags[len(matchedTags)-1])
+	targetTag := matchedTags[len(matchedTags)-1]
+	fmt.Println(targetTag)
 }
 
 func matchedByPrefix(tag, prefix string) bool {
