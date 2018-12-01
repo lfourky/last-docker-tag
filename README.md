@@ -2,6 +2,8 @@
 
 LDT retrieves the latest tag, out of list of tags, retrieved from a custom docker repository, while matching the tag by prefix / regex.
 
+It assumes you're using SemVer as your versioning strategy, or at least that your versions are numbers or are prefixed with a custom string, but still end in numbers that are sortable.
+
 For example, let's say you have a custom docker repository running on `192.168.0.100:5000`, and that you have an image `lfourky/awesomeImage` in there. 
 If you make a GET request to `192.168.0.100:5000/v2/lfourky/awesomeImage/tags/list`, you'll get the following response: 
 ```sh
@@ -21,12 +23,6 @@ go run ldt.go -h http://192.168.0.100:5000 -n lfourky/awesomeImage -p "build_"
 ```
 This will print out `build_42` to `STDOUT` so you can pipe it somewhere or append it as a result to a command.
 
-You can also use a regular expression to target it:
-```sh
-go run ldt.go -h http://192.168.0.100:5000 -n lfourky/awesomeImage -r "^build_\d+$"
-```
-This will produce the same result.
-
 # Running from an official docker image
 I've built and pushed a docker image to Docker Hub for you to use freely. 
 You can build one yourself... or not. Your choice!
@@ -34,27 +30,24 @@ You can build one yourself... or not. Your choice!
 docker run --rm lfourky/last-docker-tag -h "http://192.168.0.100:5000" -n "awesomeImage" -p "build_"
 ```
 
-## Available flags
-```sh
--v Version (string)
-   Docker repository version (defaults to "v2")
--h Host (string)
-   Full docker repository address. e.g. "http://192.168.0.130:5000"
--n Repository name (string)
-   Full repository name. e.g. "library/mysql"
--p Target tag prefix (string)
-   Prefix that you want to use for string matching. e.g. "build_"
--r Target tag regex (string)
-   Regex that you want to use for string matching. e.g. "^build_\d+$"
-```
+# How it works
+If you provide a `-p` (tag prefix) flag when you run it, it will find all the tags that start with that specified prefix. Then, it will collect them all, and strip the prefixes so it can sort it using a SemVer library (thanks, HashiCorp!). After that, it will print the latest tag with the prefix prepended to it, or, if you didn't specify a prefix, will just print the latest tag.
 
-* Do not use both prefix and regex at the same time, pick one.
+## Available flags
+| Flag | Description | Type | Default | Example | Required |
+| ------------- | ------------- | ------------- | ------------- | ------------- |------------- |
+| -h | Docker Repository Host Address | string | / | http://192.168.0.130:5000 | ✔
+| -v | Docker Repository Version | string | v2 | / | /
+| -n | Image name | string | / | lfourky/awesomeImage |  ✔
+| -p | Tag prefix to strip when matching tags | string | / | myCompany_staging_build_ | /
+| -l | Verbose logging | boolean | false | true | /
+
 * You can redirect the error to a log file, the default value returned to STDOUT is "latest" if there's an error, e.g.
-`go run ldt.go -h http://192.168.0.100:5000 -n lfourky/awesomeImage -p build_ 2>> errors.log`
+`go run ldt.go -h http://192.168.0.100:5000 -n lfourky/awesomeImage 2>> errors.log`
 
 # Where I used it
 https://github.com/kubernetes/kubernetes/issues/33664
-So I've started using Kubernetes and Drone CI for myself lately. I've found that, when I publish an image to my docker repository, and then try to apply a newer version with `kubectl set image...` and the tag is `latest`, even though there's a newer version in my docker repo, the image is not being reapplied / repulled. Thus, a workaround (this project) I'm now using is:
+Because of the issue mentioned in this... issue, I'm now using this project as a workaround that works for me and my usecase.
 ```sh
 kubectl set image deployment.v1.apps/notifications notifications=192.168.0.100:5000/ntf/notifications:$(docker run --rm lfourky/last-docker-tag -h http://192.168.0.100:5000 -n ntf/notifications -p build_ 2>>errors.log)
 ```
